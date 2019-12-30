@@ -1,7 +1,95 @@
-use actix::prelude::*;
+use actix::*;
 use actix_web_actors::ws;
 use std::time::{Duration, Instant};
 use actix_web::{web, Error, HttpRequest, HttpResponse};
+use actix::io::SinkWrite;
+use actix_codec::{AsyncRead, AsyncWrite, Framed};
+use awc::{
+    error::WsProtocolError,
+    ws::{Codec, Frame, Message},
+};
+use bytes::Bytes;
+use futures::stream::{SplitSink};
+
+struct WSClient<T>(SinkWrite<Message, SplitSink<Framed<T, Codec>, Message>>)
+where
+    T: AsyncRead + AsyncWrite;
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct ClientCommand(String);
+
+impl<T: 'static> Actor for WSClient<T>
+where
+    T: AsyncRead + AsyncWrite,
+{
+    type Context = Context<Self>;
+
+    fn started(&mut self, ctx: &mut Context<Self>) {
+        // start heartbeats otherwise server will disconnect after 10 seconds
+        self.hb(ctx)
+    }
+
+    fn stopped(&mut self, _: &mut Context<Self>) {
+        println!("Disconnected");
+
+        // Stop application on disconnect
+        System::current().stop();
+    }
+}
+
+impl<T: 'static> WSClient<T>
+where
+    T: AsyncRead + AsyncWrite,
+{
+    fn hb(&self, ctx: &mut Context<Self>) {
+        ctx.run_later(Duration::new(1, 0), |act, ctx| {
+            act.0.write(Message::Ping(Bytes::from_static(b""))).unwrap();
+            act.hb(ctx);
+
+            // client should also check for a timeout here, similar to the
+            // server code
+        });
+    }
+}
+
+/// Handle stdin commands
+impl<T: 'static> Handler<ClientCommand> for WSClient<T>
+where
+    T: AsyncRead + AsyncWrite,
+{
+    type Result = ();
+
+    fn handle(&mut self, msg: ClientCommand, _ctx: &mut Context<Self>) {
+        self.0.write(Message::Text(msg.0)).unwrap();
+    }
+}
+
+/// Handle server websocket messages
+impl<T: 'static> StreamHandler<Result<Frame, WsProtocolError>> for WSClient<T>
+where
+    T: AsyncRead + AsyncWrite,
+{
+    fn handle(&mut self, msg: Result<Frame, WsProtocolError>, _: &mut Context<Self>) {
+        if let Ok(Frame::Text(txt)) = msg {
+            println!("Server: {:?}", txt)
+        }
+    }
+
+    fn started(&mut self, _ctx: &mut Context<Self>) {
+        println!("Connected");
+    }
+
+    fn finished(&mut self, ctx: &mut Context<Self>) {
+        println!("Server disconnected");
+        ctx.stop()
+    }
+}
+
+impl<T: 'static> actix::io::WriteHandler<WsProtocolError> for WSClient<T> where
+    T: AsyncRead + AsyncWrite
+{
+}
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);

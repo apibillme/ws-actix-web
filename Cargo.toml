@@ -1,6 +1,6 @@
 [package]
 name = "ws-actix-web"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Bevan Hunt <bevan@bevanhunt.com>"]
 edition = "2018"
 keywords = ["ws", "websockets", "actix-web"]
@@ -13,3 +13,7 @@ readme = "README.md"
 actix-web = "2.0.0"
 actix = "0.9.0"
 actix-web-actors = "2.0.0"
+actix-codec = "0.2.0"
+bytes = "0.5.3"
+awc = "1.0.1"
+futures = "0.3.1"
