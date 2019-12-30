@@ -42,7 +42,7 @@ impl<T: 'static> WSClient<T>
 where
     T: AsyncRead + AsyncWrite,
 {
-    fn hb(&self, ctx: &mut Context<Self>) {
+    pub fn hb(&self, ctx: &mut Context<Self>) {
         ctx.run_later(Duration::new(1, 0), |act, ctx| {
             act.0.write(Message::Ping(Bytes::from_static(b""))).unwrap();
             act.hb(ctx);
