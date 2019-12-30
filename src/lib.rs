@@ -17,7 +17,7 @@ where
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct ClientCommand(String);
+pub struct ClientCommand(pub String);
 
 impl<T: 'static> Actor for WSClient<T>
 where

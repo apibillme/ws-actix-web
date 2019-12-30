@@ -1379,7 +1379,7 @@ dependencies = [
 
 [[package]]
 name = "ws-actix-web"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "actix 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-codec 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
