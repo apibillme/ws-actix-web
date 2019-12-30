@@ -11,7 +11,7 @@ use awc::{
 use bytes::Bytes;
 use futures::stream::{SplitSink};
 
-pub struct WSClient<T>(SinkWrite<Message, SplitSink<Framed<T, Codec>, Message>>)
+pub struct WSClient<T>(pub SinkWrite<Message, SplitSink<Framed<T, Codec>, Message>>)
 where
     T: AsyncRead + AsyncWrite;
 
