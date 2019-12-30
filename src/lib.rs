@@ -11,13 +11,13 @@ use awc::{
 use bytes::Bytes;
 use futures::stream::{SplitSink};
 
-struct WSClient<T>(SinkWrite<Message, SplitSink<Framed<T, Codec>, Message>>)
+pub struct WSClient<T>(SinkWrite<Message, SplitSink<Framed<T, Codec>, Message>>)
 where
     T: AsyncRead + AsyncWrite;
 
 #[derive(Message)]
 #[rtype(result = "()")]
-struct ClientCommand(String);
+pub struct ClientCommand(String);
 
 impl<T: 'static> Actor for WSClient<T>
 where
