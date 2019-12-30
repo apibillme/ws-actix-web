@@ -1,0 +1,15 @@
+[package]
+name = "ws-actix-web"
+version = "0.1.0"
+authors = ["Bevan Hunt <bevan@bevanhunt.com>"]
+edition = "2018"
+keywords = ["ws", "web sockets", "actix-web"]
+license = "MIT"
+description = "Web sockets for actix-web"
+repository = "https://github.com/apibillme/ws-actix-web"
+readme = "README.md"
+
+[dependencies]
+actix-web = "2.0.0"
+actix = "0.9.0"
+actix-web-actors = "2.0.0"
