@@ -103,7 +103,7 @@ pub async fn ws_index(r: HttpRequest, stream: web::Payload) -> Result<HttpRespon
 
 /// websocket connection is long running connection, it easier
 /// to handle with an actor
-struct MyWebSocket {
+pub struct MyWebSocket {
     /// Client must send ping at least once per 10 seconds (CLIENT_TIMEOUT),
     /// otherwise we drop connection.
     hb: Instant,
@@ -145,13 +145,13 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
 }
 
 impl MyWebSocket {
-    fn new() -> Self {
+   pub fn new() -> Self {
         Self { hb: Instant::now() }
     }
     /// helper method that sends ping to client every second.
     ///
     /// also this method checks heartbeats from client
-    fn hb(&self, ctx: &mut <Self as Actor>::Context) {
+    pub fn hb(&self, ctx: &mut <Self as Actor>::Context) {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             // check client heartbeats
             if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
