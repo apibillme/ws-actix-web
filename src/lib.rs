@@ -1,9 +1,10 @@
+use awc::BoxedSocket;
 use actix::*;
 use actix_web_actors::ws;
 use std::time::{Duration, Instant};
 use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix::io::SinkWrite;
-use actix_codec::{AsyncRead, AsyncWrite, Framed};
+use actix_codec::{Framed};
 use awc::{
     error::WsProtocolError,
     ws::{Codec, Frame, Message},
@@ -11,18 +12,13 @@ use awc::{
 use bytes::Bytes;
 use futures::stream::{SplitSink};
 
-pub struct WSClient<T>(pub SinkWrite<Message, SplitSink<Framed<T, Codec>, Message>>)
-where
-    T: AsyncRead + AsyncWrite;
+pub struct Client(SinkWrite<Message, SplitSink<Framed<BoxedSocket, Codec>, Message>>);
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct ClientCommand(pub String);
+pub struct ClientCommand(String);
 
-impl<T: 'static> Actor for WSClient<T>
-where
-    T: AsyncRead + AsyncWrite,
-{
+impl Actor for Client {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Context<Self>) {
@@ -31,18 +27,13 @@ where
     }
 
     fn stopped(&mut self, _: &mut Context<Self>) {
-        println!("Disconnected");
-
         // Stop application on disconnect
         System::current().stop();
     }
 }
 
-impl<T: 'static> WSClient<T>
-where
-    T: AsyncRead + AsyncWrite,
-{
-    pub fn hb(&self, ctx: &mut Context<Self>) {
+impl Client {
+    fn hb(&self, ctx: &mut Context<Self>) {
         ctx.run_later(Duration::new(1, 0), |act, ctx| {
             act.0.write(Message::Ping(Bytes::from_static(b""))).unwrap();
             act.hb(ctx);
@@ -54,10 +45,7 @@ where
 }
 
 /// Handle stdin commands
-impl<T: 'static> Handler<ClientCommand> for WSClient<T>
-where
-    T: AsyncRead + AsyncWrite,
-{
+impl Handler<ClientCommand> for Client {
     type Result = ();
 
     fn handle(&mut self, msg: ClientCommand, _ctx: &mut Context<Self>) {
@@ -66,30 +54,23 @@ where
 }
 
 /// Handle server websocket messages
-impl<T: 'static> StreamHandler<Result<Frame, WsProtocolError>> for WSClient<T>
-where
-    T: AsyncRead + AsyncWrite,
-{
+impl StreamHandler<Result<Frame, WsProtocolError>> for Client {
     fn handle(&mut self, msg: Result<Frame, WsProtocolError>, _: &mut Context<Self>) {
-        if let Ok(Frame::Text(txt)) = msg {
-            println!("Server: {:?}", txt)
+        if let Ok(Frame::Text(_txt)) = msg {
+            // println!("Server: {:?}", txt)
         }
     }
 
     fn started(&mut self, _ctx: &mut Context<Self>) {
-        println!("Connected");
+        // println!("Connected");
     }
 
     fn finished(&mut self, ctx: &mut Context<Self>) {
-        println!("Server disconnected");
         ctx.stop()
     }
 }
 
-impl<T: 'static> actix::io::WriteHandler<WsProtocolError> for WSClient<T> where
-    T: AsyncRead + AsyncWrite
-{
-}
+impl actix::io::WriteHandler<WsProtocolError> for Client {}
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -98,18 +79,19 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// do websocket handshake and start `MyWebSocket` actor
 pub async fn ws_index(r: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
-    ws::start(MyWebSocket::new(), &r, stream)
+    let res = ws::start(WebSocket::new(), &r, stream);
+    res
 }
 
 /// websocket connection is long running connection, it easier
 /// to handle with an actor
-pub struct MyWebSocket {
+pub struct WebSocket {
     /// Client must send ping at least once per 10 seconds (CLIENT_TIMEOUT),
     /// otherwise we drop connection.
     hb: Instant,
 }
 
-impl Actor for MyWebSocket {
+impl Actor for WebSocket {
     type Context = ws::WebsocketContext<Self>;
 
     /// Method is called on actor start. We start the heartbeat process here.
@@ -119,13 +101,14 @@ impl Actor for MyWebSocket {
 }
 
 /// Handler for `ws::Message`
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
+impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocket {
     fn handle(
         &mut self,
         msg: Result<ws::Message, ws::ProtocolError>,
         ctx: &mut Self::Context,
     ) {
         // process websocket messages
+        // println!("WS: {:?}", msg);
         match msg {
             Ok(ws::Message::Ping(msg)) => {
                 self.hb = Instant::now();
@@ -144,23 +127,28 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
     }
 }
 
-impl MyWebSocket {
-   pub fn new() -> Self {
+impl WebSocket {
+    fn new() -> Self {
         Self { hb: Instant::now() }
     }
+
     /// helper method that sends ping to client every second.
     ///
     /// also this method checks heartbeats from client
-    pub fn hb(&self, ctx: &mut <Self as Actor>::Context) {
+    fn hb(&self, ctx: &mut <Self as Actor>::Context) {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             // check client heartbeats
             if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
+                // heartbeat timed out
+                // println!("Websocket Client heartbeat failed, disconnecting!");
+
                 // stop actor
                 ctx.stop();
 
                 // don't try to send a ping
                 return;
             }
+
             ctx.ping(b"");
         });
     }
